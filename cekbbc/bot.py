@@ -83,37 +83,34 @@ async def count_user_message(update: Update, context: CallbackContext) -> None:
     logger.debug(f"Received message: {update.message.text} from user: {update.message.from_user.username}")
     if update.effective_chat.id == valid_group_id:
         user = update.message.from_user
-        if user.username:
-            user_name = user.username
-        else:
-            user_name = f"{user.first_name} {user.last_name}" if user.last_name else user.first_name
-        
-        user_message_count[user_name] += 1
+        user_name = user.username if user.username else f"{user.first_name} {user.last_name}" if user.last_name else user.first_name
+        user_message_count[str(user.id)] = user_message_count.get(str(user.id), 0) + 1
+        context.chat_data[f"user_{user.id}_username"] = user_name  # Simpan nama pengguna
         save_data()
 
-# Fungsi untuk /banbbc (ban user dengan pesan < 100)
+# Fungsi untuk /banbbc (ban user dengan pesan < 200)
 async def banbbc(update: Update, context: CallbackContext) -> None:
     if not await is_admin(update):
         await update.message.reply_text("Hanya admin yang bisa menjalankan perintah ini!")
         return
-    
+
     if update.effective_chat.id != valid_group_id:
         await update.message.reply_text("Perintah ini hanya berlaku di grup yang valid!")
         return
 
-    users_to_ban = [user for user, count in user_message_count.items() if count < 100]
-    
+    users_to_ban = [int(uid) for uid, count in user_message_count.items() if count < 200]
+
     if users_to_ban:
-        for user_name in users_to_ban:
+        for user_id in users_to_ban:
             try:
-                member = await context.bot.get_chat_member(update.effective_chat.id, user_name)
-                await context.bot.kick_chat_member(update.effective_chat.id, member.user.id)
-                await update.message.reply_text(f"{user_name} telah dibanned karena jumlah pesan mereka di bawah 100.")
+                await context.bot.ban_chat_member(update.effective_chat.id, user_id)
+                username = context.chat_data.get(f"user_{user_id}_username", f"ID {user_id}")
+                await update.message.reply_text(f"🚫 {username} telah dibanned karena jumlah pesan mereka di bawah 200.")
             except Exception as e:
-                logger.error(f"Error while banning {user_name}: {e}")
-                await update.message.reply_text(f"Gagal menendang {user_name}.")
+                logger.error(f"Error while banning {user_id}: {e}")
+                await update.message.reply_text(f"Gagal menendang user dengan ID {user_id}.")
     else:
-        await update.message.reply_text("Tidak ada pengguna dengan pesan di bawah 100.")
+        await update.message.reply_text("Tidak ada pengguna dengan pesan di bawah 200.")
 
 # Fungsi untuk menangani error
 async def error(update: Update, context: CallbackContext) -> None:
